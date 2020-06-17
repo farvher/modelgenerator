@@ -1,0 +1,22 @@
+package {{package}};
+
+import java.io.Serializable;
+import javax.validation.constraints.*;
+
+/**
+ *
+ * @author Cobiscorp
+ */
+public class {classname} implements Serializable{
+
+    private static final long serialVersionUID = -3027297081943227365L;
+
+{{#property}}
+    {{annotations}}
+    private String {{prop}};
+{{/property}}
+
+
+
+
+}
