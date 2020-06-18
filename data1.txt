@@ -1,4 +1,3 @@
-vi_key;vi_id;vi_variablename;vi_business_variable;vi_desc_business_var;vi_description;vi_valuetype;vi_length;vi_datasource;vi_codigo;vi_fieldtype;vi_messageid;vi_validateexistence;vi_fieldid;vi_validatecontent;vi_digitalsignature;vi_tableid;vi_cobiscatalogid;vi_equivalentvalue;vi_mess_name;vi_network;vi_datatype
 1-1--1-1A;1;num_orden_originante;49;originatorNumberOrder;Número de orden originante;V;20; ; ;;1;S;1;S;S;0; ; ;1A;ACCL;S
 1-37--2-1B;1;num_orden_originante;49;originatorNumberOrder;Número de orden originante;V;20; ; ;;2;N;1;N;N;0; ; ;1B;ACCL;S
 1-42--3-4A;1;num_orden_originante;49;originatorNumberOrder;Número de orden originante;V;20; ; ;;3;S;1;S;N;0; ; ;4A;ACCL;S

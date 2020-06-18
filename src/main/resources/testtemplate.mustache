@@ -1,0 +1,50 @@
+package com.cobiscorp.messagetransformation;
+
+import static org.junit.Assert.assertTrue;
+import java.io.Serializable;
+import java.util.Collection;
+import java.util.Set;
+import javax.validation.*;
+import org.junit.Test;
+import com.cobiscorp.accl.messagetransformation.bsl.dto.*;
+
+
+/**
+ * Test cases for ACCL Messages
+ *
+ * @author Cobiscorp
+ */
+public class {{className}} implements Serializable{
+
+     {{#tests}}
+     /**
+        * Test case validate ACCL Messages {@link {{&dtoName}} }
+        *
+        */
+     @Test
+     public void {{&textName}} {
+        {{dtoName}} tmpDto = {{dtoName}}.new{{dtoName}}()
+                        {{#properties}}
+                            {{&.}}
+                        {{/properties}}
+                        .build();
+
+        assertTrue("Violations must be empty", validateMessage(tmpDto).isEmpty());
+
+     }
+     {{/tests}}
+
+	private <T> Collection<ConstraintViolation<T>> validateMessage(T acclMessage) {
+		ValidatorFactory factory = Validation.buildDefaultValidatorFactory();
+		Validator validator = factory.getValidator();
+		Set<ConstraintViolation<T>> violations = validator.validate(acclMessage);
+		for (ConstraintViolation<T> v : violations) {
+			System.out.println(v.getMessage());
+		}
+		return violations;
+
+	}
+
+
+
+}

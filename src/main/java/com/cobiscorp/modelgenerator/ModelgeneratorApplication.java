@@ -1,10 +1,11 @@
 package com.cobiscorp.modelgenerator;
 
+import com.cobiscorp.modelgenerator.model.Context;
+import com.cobiscorp.modelgenerator.model.ContextTest;
 import com.cobiscorp.modelgenerator.model.MessField;
 import com.github.mustachejava.DefaultMustacheFactory;
 import com.github.mustachejava.Mustache;
 import com.github.mustachejava.MustacheFactory;
-import org.apache.juli.logging.Log;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,20 +14,25 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.util.StringUtils;
 
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.io.StringWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.text.MessageFormat;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @SpringBootApplication
 public class ModelgeneratorApplication implements CommandLineRunner {
+    public static final String DTOTEMPLATE_MUSTACHE = "dtotemplate.mustache";
+    public static final String TESTTEMPLATE_MUSTACHE = "testtemplate.mustache";
+    public static final String TEST_CLASSNAME = "TransformAcclToCanonicalReceiveOrderTest";
+
     @Autowired
     private ApplicationContext context;
 
@@ -75,72 +81,122 @@ public class ModelgeneratorApplication implements CommandLineRunner {
             temp.setVi_datatype(split[21]);
             messFieldList.add(temp);
         }
-        generateClasses(messFieldList, "ACCL-MLD", "1A");
+
+        generateDtoAndTests(messFieldList);
 
         ((ConfigurableApplicationContext) context).close();
     }
 
+    private void generateDtoAndTests(List<MessField> messFieldList) {
+        Map<String,
+                Map<String, List<MessField>>> types = messFieldList
+                .stream()
+                .collect(Collectors.groupingBy(MessField::getVi_network
+                        , Collectors.groupingBy(MessField::getVi_mess_name)));
 
-    public void generateClasses(List<MessField> messFieldList,
+        List<ContextTest.Test> tests = new ArrayList<>();
+        types.entrySet().stream().forEach(t -> t.getValue().forEach((m, n) -> {
+            String network = t.getKey();
+            String messageType = m;
+            //TODO definir nombre del dto
+            String name = MessageFormat.format("Accl{0}{1}"
+                    , network.replace("-", "")
+                    , messageType);
+            LOG.info(name + " GENERATING...");
+            generateClasses(name, messFieldList, network, messageType);
+            tests.add(generateTestCases(name, messFieldList, network, messageType));
+
+        }));
+
+        ContextTest contextTest = new ContextTest(tests, TEST_CLASSNAME);
+        String content = mustacheContent(contextTest, TESTTEMPLATE_MUSTACHE);
+        generateFile(MessageFormat.format("./classes/{0}.java", TEST_CLASSNAME), content);
+
+    }
+
+
+    public void generateClasses(String className,
+                                List<MessField> messFieldList,
                                 String network,
-                                String message) throws IOException {
+                                String message){
 
 
-        String newLine = "\n";
-        String packageDefinition = "package com.cobiscorp.accl.messagetransformation.bsl.dto;";
-        String imports = "import java.io.Serializable;\nimport javax.validation.constraints.*;";
-        String classDefinition = "public class {0} implements Serializable";
-
-        String notBlank = "@NotBlank(message = \"{0} cannot be null\")";
-        String size = "@Size(max = {0}, min = {1})";
-        String property = "private String {0};";
-        String serialVersion = "private static final long serialVersionUID = -3027297081943227365L;";
-
-        String classEnd = "}";
-
-        Map<String, List<MessField>> map = messFieldList
+        Map<String, List<MessField>> fields = messFieldList
                 .stream()
                 .distinct()
                 .filter(s -> network.equals(s.getVi_network()))
                 .filter(s -> message.equals(s.getVi_mess_name()))
                 .collect(Collectors.groupingBy(MessField::getVi_variablename));
 
-        LOG.info(map.toString());
+        fields.keySet().forEach(LOG::info);
 
-        String className = "{0}ReceiverOrder{1}.java";
-        className = MessageFormat.format(className, network, message);
-        Files.deleteIfExists(Paths.get("./" + className));
-        Files.createFile(Paths.get("./" + className));
-        StringBuilder stringBuilder = new StringBuilder("");
-        stringBuilder.append(packageDefinition);
-        stringBuilder.append(newLine);
-        stringBuilder.append(newLine);
-        stringBuilder.append(imports);
-        stringBuilder.append(newLine);
-        stringBuilder.append(newLine);
-        stringBuilder.append(MessageFormat.format(classDefinition, className) + "{");
-        stringBuilder.append(newLine);
-        stringBuilder.append(serialVersion);
-        stringBuilder.append(newLine);
-        for (Map.Entry e : map.entrySet()) {
-            String prop = (String) e.getKey();
-            prop =  camelCase(prop);
+        Context context = new Context();
+        context.setClassname(className);
+        context.setPackages(GeneratorDto.packageDefinition);
+        context.setSerialVersionUID("312312412312312312L");
+        List<Context.Property> properties = fields.entrySet()
+                .stream()
+                .map(f -> new Context.Property(camelCase(f.getKey()),
+                        buildAnnotations(f.getValue())))
+                .collect(Collectors.toList());
 
-            stringBuilder.append(MessageFormat.format(notBlank, e.getKey()));
-            stringBuilder.append(MessageFormat.format(property, prop));
-            stringBuilder.append(newLine);
-            stringBuilder.append(newLine);
-        }
-
-        stringBuilder.append(newLine);
-        stringBuilder.append(classEnd);
-
-        generateFile(className,stringBuilder.toString());
+        context.setProperties(properties);
+        String content = mustacheContent(context, DTOTEMPLATE_MUSTACHE);
+        generateFile(MessageFormat.format("./classes/{0}.java", className), content);
 
     }
 
-    public void generateFile(String className, String content) throws IOException {
-        Files.write(Paths.get(className), content.getBytes(), StandardOpenOption.CREATE);
+    private String mustacheContent(Object context, String template) {
+        try {
+            StringWriter writer = new StringWriter();
+            MustacheFactory mf = new DefaultMustacheFactory();
+            Mustache mustache = mf.compile(template);
+            mustache.execute(writer, context).flush();
+            return writer.toString();
+        } catch (Exception ex) {
+            LOG.error("mustache error", ex);
+        }
+        return "";
+    }
+
+    public void generateFile(String className, String content) {
+        try {
+            Files.deleteIfExists(Paths.get(className));
+            Files.write(Paths.get(className), content.getBytes(), StandardOpenOption.CREATE_NEW);
+        } catch (IOException e) {
+            LOG.error("Error generating file", e);
+        }
+
+    }
+
+    public List<String> buildAnnotations(List<MessField> messFields) {
+
+        Optional<MessField> first = messFields.stream()
+                .findFirst();
+
+
+        String notBlank = first
+                .filter(f -> "S".equals(f.getVi_validatecontent()))
+                .map(s -> MessageFormat
+                        .format(GeneratorDto.notBlank, s.getVi_variablename()))
+                .orElse("");
+
+        String notNull = first
+                .filter(f -> "S".equals(f.getVi_validateexistence()))
+                .map(s -> MessageFormat
+                        .format(GeneratorDto.notNull, s.getVi_variablename()))
+                .orElse("");
+
+        String size = first
+                .map(s -> MessageFormat
+                        .format(GeneratorDto.size, s.getVi_length(), "1"))
+                .orElse("");
+
+        List<String> result =  Arrays.asList(notNull, notBlank, size)
+                .stream()
+                .filter(s -> !s.isEmpty()).collect(Collectors.toList());
+
+        return result ;
     }
 
     private static String camelCase(String word) {
@@ -157,4 +213,53 @@ public class ModelgeneratorApplication implements CommandLineRunner {
         }
         return results;
     }
+
+    public ContextTest.Test generateTestCases(String className,
+                                              List<MessField> messFieldList,
+                                              String network,
+                                              String message) {
+
+        Map<String, List<MessField>> fields = messFieldList
+                .stream()
+                .distinct()
+                .filter(s -> network.equals(s.getVi_network()))
+                .filter(s -> message.equals(s.getVi_mess_name()))
+                .collect(Collectors.groupingBy(MessField::getVi_variablename));
+
+        fields.keySet().forEach(LOG::info);
+
+        List<String> properties = fields.entrySet().stream().map(
+                s -> {
+                    MessField mf = s.getValue().stream().findAny().get();
+                    String equivalent = mf.getVi_equivalentvalue();
+                    int length = Integer.parseInt(mf.getVi_length());
+                    String fakeValue = getFakeValue(length);
+                    equivalent = equivalent.isBlank()? fakeValue: equivalent;
+                    String prop = MessageFormat.format(".with{0}(\"{1}\")", StringUtils.capitalize(camelCase(s.getKey())), equivalent);
+                    return prop;
+                }
+        ).collect(Collectors.toList());
+
+        ContextTest.Test test = new ContextTest.Test();
+
+        String testName = className + "Test()";
+        test.setTextName(testName);
+        test.setDtoName(className);
+        test.setProperties(properties);
+        return test;
+
+    }
+
+    private String getFakeValue(int length) {
+        String fakeValue = "";
+        for (int i = 0; i < length; i++) {
+            fakeValue+=i;
+            if(i>10){
+                break;
+            }
+        }
+        return fakeValue;
+    }
+
+
 }

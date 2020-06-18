@@ -1,0 +1,58 @@
+package {{packages}}
+
+import java.io.Serializable;
+import javax.validation.constraints.*;
+
+/**
+ *
+ * @author Cobiscorp
+ */
+public class {{classname}} implements Serializable{
+
+    private static final long serialVersionUID = {{serialVersionUID}};
+
+    {{#properties}}
+    {{#annotations}}
+    {{&.}}
+    {{/annotations}}
+    private String {{property}};
+
+    {{/properties}}
+
+//getters
+    {{#properties}}
+     public String {{getter}}() {
+        return {{property}};
+     }
+    {{/properties}}
+
+    private {{classname}}(Builder builder){
+        {{#properties}}
+        this.{{property}} = builder.{{property}};
+        {{/properties}}
+    }
+
+    public static Builder new{{classname}}() {
+            return new Builder();
+    }
+
+      public static class Builder {
+            {{#properties}}
+                private String {{property}};
+            {{/properties}}
+
+            private Builder() {}
+
+            public {{classname}} build() {
+                return new {{classname}}(this);
+            }
+            {{#properties}}
+            public Builder with{{camelcase}}(String {{property}}) {
+                this.{{property}} = {{property}};
+                return this;
+            }
+            {{/properties}}
+      }
+
+
+}
