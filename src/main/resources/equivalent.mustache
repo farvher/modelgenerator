@@ -1,0 +1,30 @@
+package com.cobiscorp.accl.messagetransformation.bsl.impl.equivalence;
+
+/**
+ * Equivalence values and catalog to transform {{from}} into {{to}}
+ *
+ * @author Cobiscorp
+ */
+public class {{className}} {
+
+
+        {{#methods}}
+        /**
+        	* Equivalence values and catalog for {{methodName}}
+        	* @param o {{request}}
+        	* @return {{response}}
+        	* */
+        public static {{returnType}} {{methodName}}({{paramType}} o){
+
+            {{#conditions}}
+            if({{&equivalence}}{{&param}}){
+                return {{&code}};
+            }
+            {{/conditions}}
+
+            return null;
+        }
+        {{/methods}}
+
+
+}

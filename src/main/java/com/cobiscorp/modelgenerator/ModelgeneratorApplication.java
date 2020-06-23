@@ -17,7 +17,6 @@ import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.util.StringUtils;
 
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,6 +30,7 @@ import java.util.stream.Collectors;
 public class ModelgeneratorApplication implements CommandLineRunner {
     public static final String DTOTEMPLATE_MUSTACHE = "dtotemplate.mustache";
     public static final String TESTTEMPLATE_MUSTACHE = "testtemplate.mustache";
+    public static final String MNEMONICTEMPLATE_MUSTACHE = "mnemonic.mustache";
     public static final String TEST_CLASSNAME = "TransformAcclToCanonicalReceiveOrderTest";
 
     @Autowired
@@ -82,9 +82,21 @@ public class ModelgeneratorApplication implements CommandLineRunner {
             messFieldList.add(temp);
         }
 
-        generateDtoAndTests(messFieldList);
+
+        //generateMnemonic(messFieldList);
+        //generateDtoAndTests(messFieldList);
+        GenerateTransforms.generateTransforms(messFieldList);
 
         ((ConfigurableApplicationContext) context).close();
+    }
+
+    public void generateMnemonic(List<MessField> messFieldList) {
+        List<String> constants = GenerateTransforms.generateCatalogsConstants(messFieldList);
+        Context context = new Context();
+        context.setClassname("Mnemonic");
+        context.setConstants(constants);
+        String content = Util.mustacheContent(context, MNEMONICTEMPLATE_MUSTACHE);
+        Util.generateFile(MessageFormat.format("./classes/{0}.java", "Mnemonic"), content);
     }
 
     private void generateDtoAndTests(List<MessField> messFieldList) {
@@ -99,7 +111,7 @@ public class ModelgeneratorApplication implements CommandLineRunner {
             String network = t.getKey();
             String messageType = m;
             //TODO definir nombre del dto
-            String name = MessageFormat.format("Accl{0}{1}"
+            String name = MessageFormat.format("{0}{1}"
                     , network.replace("-", "")
                     , messageType);
             LOG.info(name + " GENERATING...");
@@ -109,8 +121,8 @@ public class ModelgeneratorApplication implements CommandLineRunner {
         }));
 
         ContextTest contextTest = new ContextTest(tests, TEST_CLASSNAME);
-        String content = mustacheContent(contextTest, TESTTEMPLATE_MUSTACHE);
-        generateFile(MessageFormat.format("./classes/{0}.java", TEST_CLASSNAME), content);
+        String content = Util.mustacheContent(contextTest, TESTTEMPLATE_MUSTACHE);
+        Util.generateFile(MessageFormat.format("./classes/{0}.java", TEST_CLASSNAME), content);
 
     }
 
@@ -118,7 +130,7 @@ public class ModelgeneratorApplication implements CommandLineRunner {
     public void generateClasses(String className,
                                 List<MessField> messFieldList,
                                 String network,
-                                String message){
+                                String message) {
 
 
         Map<String, List<MessField>> fields = messFieldList
@@ -136,38 +148,47 @@ public class ModelgeneratorApplication implements CommandLineRunner {
         context.setSerialVersionUID("312312412312312312L");
         List<Context.Property> properties = fields.entrySet()
                 .stream()
-                .map(f -> new Context.Property(camelCase(f.getKey()),
+                .map(f -> new Context.Property(Util.camelCase(f.getKey()),
                         buildAnnotations(f.getValue())))
                 .collect(Collectors.toList());
 
         context.setProperties(properties);
-        String content = mustacheContent(context, DTOTEMPLATE_MUSTACHE);
-        generateFile(MessageFormat.format("./classes/{0}.java", className), content);
+        String content = Util.mustacheContent(context, DTOTEMPLATE_MUSTACHE);
+        Util.generateFile(MessageFormat.format("./classes/{0}.java", className), content);
 
     }
 
-    private String mustacheContent(Object context, String template) {
-        try {
-            StringWriter writer = new StringWriter();
-            MustacheFactory mf = new DefaultMustacheFactory();
-            Mustache mustache = mf.compile(template);
-            mustache.execute(writer, context).flush();
-            return writer.toString();
-        } catch (Exception ex) {
-            LOG.error("mustache error", ex);
-        }
-        return "";
+    public void generateCanonical(String className,
+                                  List<MessField> messFieldList,
+                                  String network,
+                                  String message) {
+
+
+        Map<String, List<MessField>> fields = messFieldList
+                .stream()
+                .distinct()
+                .filter(s -> network.equals(s.getVi_network()))
+                .filter(s -> message.equals(s.getVi_mess_name()))
+                .collect(Collectors.groupingBy(MessField::getVi_variablename));
+
+        fields.keySet().forEach(LOG::info);
+
+        Context context = new Context();
+        context.setClassname(className);
+        context.setPackages(GeneratorDto.packageDefinition);
+        context.setSerialVersionUID("312312412312312312L");
+        List<Context.Property> properties = fields.entrySet()
+                .stream()
+                .map(f -> new Context.Property(Util.camelCase(f.getKey()),
+                        buildAnnotations(f.getValue())))
+                .collect(Collectors.toList());
+
+        context.setProperties(properties);
+        String content = Util.mustacheContent(context, MNEMONICTEMPLATE_MUSTACHE);
+        Util.generateFile(MessageFormat.format("./classes/{0}.java", className), content);
+
     }
 
-    public void generateFile(String className, String content) {
-        try {
-            Files.deleteIfExists(Paths.get(className));
-            Files.write(Paths.get(className), content.getBytes(), StandardOpenOption.CREATE_NEW);
-        } catch (IOException e) {
-            LOG.error("Error generating file", e);
-        }
-
-    }
 
     public List<String> buildAnnotations(List<MessField> messFields) {
 
@@ -192,27 +213,13 @@ public class ModelgeneratorApplication implements CommandLineRunner {
                         .format(GeneratorDto.size, s.getVi_length(), "1"))
                 .orElse("");
 
-        List<String> result =  Arrays.asList(notNull, notBlank, size)
+        List<String> result = Arrays.asList(notNull, notBlank, size)
                 .stream()
                 .filter(s -> !s.isEmpty()).collect(Collectors.toList());
 
-        return result ;
+        return result;
     }
 
-    private static String camelCase(String word) {
-        String[] chars = word.split("");
-        Boolean upper = false;
-        String results = "";
-        for (String c : chars) {
-            if (!"_".equals(c)) {
-                results += upper ? c.toUpperCase() : c;
-                upper = false;
-            } else {
-                upper = true;
-            }
-        }
-        return results;
-    }
 
     public ContextTest.Test generateTestCases(String className,
                                               List<MessField> messFieldList,
@@ -233,9 +240,9 @@ public class ModelgeneratorApplication implements CommandLineRunner {
                     MessField mf = s.getValue().stream().findAny().get();
                     String equivalent = mf.getVi_equivalentvalue();
                     int length = Integer.parseInt(mf.getVi_length());
-                    String fakeValue = getFakeValue(length);
-                    equivalent = equivalent.isBlank()? fakeValue: equivalent;
-                    String prop = MessageFormat.format(".with{0}(\"{1}\")", StringUtils.capitalize(camelCase(s.getKey())), equivalent);
+                    String fakeValue = Util.getFakeValue(length);
+                    equivalent = equivalent.isBlank() ? fakeValue : equivalent;
+                    String prop = MessageFormat.format(".with{0}(\"{1}\")", StringUtils.capitalize(Util.camelCase(s.getKey())), equivalent);
                     return prop;
                 }
         ).collect(Collectors.toList());
@@ -248,17 +255,6 @@ public class ModelgeneratorApplication implements CommandLineRunner {
         test.setProperties(properties);
         return test;
 
-    }
-
-    private String getFakeValue(int length) {
-        String fakeValue = "";
-        for (int i = 0; i < length; i++) {
-            fakeValue+=i;
-            if(i>10){
-                break;
-            }
-        }
-        return fakeValue;
     }
 
 

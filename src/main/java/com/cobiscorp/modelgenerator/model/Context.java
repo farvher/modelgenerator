@@ -3,13 +3,13 @@ package com.cobiscorp.modelgenerator.model;
 import org.springframework.util.StringUtils;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class Context {
 
     List<Property> properties;
     List<String> getters;
     List<String> setters;
+    List<String> constants;
     String classname;
     String serialVersionUID;
     String packages;
@@ -55,17 +55,42 @@ public class Context {
         return setters;
     }
 
+    public void setGetters(List<String> getters) {
+        this.getters = getters;
+    }
+
+    public void setSetters(List<String> setters) {
+        this.setters = setters;
+    }
+
+    public List<String> getConstants() {
+        return constants;
+    }
+
+    public void setConstants(List<String> constants) {
+        this.constants = constants;
+    }
+
     public static class Property {
         String property;
         String getter;
         String camelcase;
         List<String> annotations;
+        String type = "String";
 
         public Property(String property, List<String> annotations) {
             this.annotations = annotations;
             this.property = property;
             this.getter = "get"+StringUtils.capitalize(property);
             this.camelcase = StringUtils.capitalize(property);
+        }
+
+        public Property(String property, List<String> annotations, String type) {
+            this.annotations = annotations;
+            this.property = property;
+            this.getter = "get"+StringUtils.capitalize(property);
+            this.camelcase = StringUtils.capitalize(property);
+            this.type = type;
         }
     }
 }

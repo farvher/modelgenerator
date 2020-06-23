@@ -16,6 +16,9 @@ import com.cobiscorp.accl.messagetransformation.bsl.dto.*;
  */
 public class {{className}} implements Serializable{
 
+    private static final String VIOLATIONS_MUST_BE_EMPTY = "Violations must be empty";
+
+
      {{#tests}}
      /**
         * Test case validate ACCL Messages {@link {{&dtoName}} }
@@ -29,7 +32,7 @@ public class {{className}} implements Serializable{
                         {{/properties}}
                         .build();
 
-        assertTrue("Violations must be empty", validateMessage(tmpDto).isEmpty());
+        assertTrue(VIOLATIONS_MUST_BE_EMPTY, validateMessage(tmpDto).isEmpty());
 
      }
      {{/tests}}
