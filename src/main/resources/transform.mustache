@@ -26,12 +26,15 @@ implements ITransformation<{{stype}}, {{ttype}}> {
 	@Override
     public {{ttype}} transform() {
 
-		return {{ttype}}
+		 {{ttype}} t = {{ttype}}
 				.new{{ttype}}()
 				{{#builders}}
 				{{&.}}
 				{{/builders}}
 				.build();
+
+		ValidateUtil.validateMessage(t);
+		return t;
 
     }
 

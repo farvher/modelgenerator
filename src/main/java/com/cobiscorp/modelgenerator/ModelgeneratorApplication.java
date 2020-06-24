@@ -33,6 +33,9 @@ public class ModelgeneratorApplication implements CommandLineRunner {
     public static final String MNEMONICTEMPLATE_MUSTACHE = "mnemonic.mustache";
     public static final String TEST_CLASSNAME = "TransformAcclToCanonicalReceiveOrderTest";
 
+    public static String[] acclToCanonical = {"2A", "3B", "1B", "4A", "5A"};
+    public static String[] canonicalToAccl = {"1A", "3A", "AR"};
+
     @Autowired
     private ApplicationContext context;
 
@@ -84,8 +87,8 @@ public class ModelgeneratorApplication implements CommandLineRunner {
 
 
         //generateMnemonic(messFieldList);
-        //generateDtoAndTests(messFieldList);
-        GenerateTransforms.generateTransforms(messFieldList);
+        generateDtoAndTests(messFieldList);
+        //GenerateTransforms.generateTransforms(messFieldList);
 
         ((ConfigurableApplicationContext) context).close();
     }
@@ -226,23 +229,32 @@ public class ModelgeneratorApplication implements CommandLineRunner {
                                               String network,
                                               String message) {
 
+        Boolean acclToCanonicalDirection = Arrays.asList(acclToCanonical).contains(message);
         Map<String, List<MessField>> fields = messFieldList
                 .stream()
                 .distinct()
                 .filter(s -> network.equals(s.getVi_network()))
                 .filter(s -> message.equals(s.getVi_mess_name()))
-                .collect(Collectors.groupingBy(MessField::getVi_variablename));
+                .collect(Collectors.groupingBy(acclToCanonicalDirection ?
+                        MessField::getVi_variablename : MessField::getVi_desc_business_var));
 
         fields.keySet().forEach(LOG::info);
 
         List<String> properties = fields.entrySet().stream().map(
                 s -> {
                     MessField mf = s.getValue().stream().findAny().get();
-                    String equivalent = mf.getVi_equivalentvalue();
+                    String equivalent = acclToCanonicalDirection ? mf.getVi_equivalentvalue() : mf.getVi_cobiscatalogid();
                     int length = Integer.parseInt(mf.getVi_length());
                     String fakeValue = Util.getFakeValue(length);
                     equivalent = equivalent.isBlank() ? fakeValue : equivalent;
-                    String prop = MessageFormat.format(".with{0}(\"{1}\")", StringUtils.capitalize(Util.camelCase(s.getKey())), equivalent);
+                    String format = acclToCanonicalDirection ? ".with{0}(\"{1}\")":".{0}(\"{1}\")";
+                    String method = acclToCanonicalDirection ?
+                            StringUtils.capitalize(Util.camelCase(s.getKey())) :Util.camelCase(s.getKey())  ;
+                    if("amount".equals(s.getKey())){
+                        equivalent = "new java.math.BigDecimal(100L)";
+                        format = ".{0}({1})";
+                    }
+                    String prop = MessageFormat.format(format, method, equivalent);
                     return prop;
                 }
         ).collect(Collectors.toList());
@@ -251,8 +263,13 @@ public class ModelgeneratorApplication implements CommandLineRunner {
 
         String testName = className + "Test()";
         test.setTextName(testName);
-        test.setDtoName(className);
+        test.setDtoName(acclToCanonicalDirection ? className : "CanonicalReceiveOrder");
         test.setProperties(properties);
+        String stype = acclToCanonicalDirection ? className : "CanonicalReceiveOrder";
+        String ttype = acclToCanonicalDirection ? "CanonicalReceiveOrder" : className;
+        String format = "{1} transformation = new Transform{0}to{1}(tmpDto).transform()";
+        String transformation = MessageFormat.format(format, stype, ttype);
+        test.setAsserts(transformation);
         return test;
 
     }

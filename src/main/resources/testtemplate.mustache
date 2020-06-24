@@ -6,7 +6,10 @@ import java.util.Collection;
 import java.util.Set;
 import javax.validation.*;
 import org.junit.Test;
+import java.text.MessageFormat;
 import com.cobiscorp.accl.messagetransformation.bsl.dto.*;
+import com.cobiscorp.accl.messagetransformation.bsl.impl.*;
+import com.cobiscorp.messagetransformation.bsl.dto.CanonicalReceiveOrder;
 
 
 /**
@@ -14,7 +17,7 @@ import com.cobiscorp.accl.messagetransformation.bsl.dto.*;
  *
  * @author Cobiscorp
  */
-public class {{className}} implements Serializable{
+public class {{className}} {
 
     private static final String VIOLATIONS_MUST_BE_EMPTY = "Violations must be empty";
 
@@ -26,6 +29,8 @@ public class {{className}} implements Serializable{
         */
      @Test
      public void {{&textName}} {
+         long startTime = System.currentTimeMillis();
+
         {{dtoName}} tmpDto = {{dtoName}}.new{{dtoName}}()
                         {{#properties}}
                             {{&.}}
@@ -33,6 +38,13 @@ public class {{className}} implements Serializable{
                         .build();
 
         assertTrue(VIOLATIONS_MUST_BE_EMPTY, validateMessage(tmpDto).isEmpty());
+
+        {{&asserts}};
+        assertTrue(VIOLATIONS_MUST_BE_EMPTY, validateMessage(transformation).isEmpty());
+
+        long endTime = System.currentTimeMillis();
+        long duration = (endTime - startTime);
+        System.out.println(MessageFormat.format("{{&textName}} time execution : {0} milliseconds", duration));
 
      }
      {{/tests}}

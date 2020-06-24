@@ -79,7 +79,7 @@ public class GenerateTransforms {
             String ttype = MessageFormat.format("{0}{1}"
                     , network.replace("-", "")
                     , message);
-            String className = MessageFormat.format("Transform{1}to{0}", stype, ttype);
+            String className = MessageFormat.format("Transform{0}to{1}", stype, ttype);
             contextTransform.setClassName(className);
             contextTransform.setTtype(ttype);
             contextTransform.setStype(stype);
