@@ -20,7 +20,7 @@ public class Util {
 
     public static String getFakeValue(int length) {
         String fakeValue = "";
-        for (int i = 0; i < length; i++) {
+        for (int i = 1; i < length; i++) {
             fakeValue += i;
             if (i > 10) {
                 break;

@@ -18,7 +18,8 @@ public class ContextTest {
         String dtoName;
         List<String> properties;
         String propertyAssert;
-        String asserts;
+        String transformation;
+        List<String> asserts;
 
         public String getTextName() {
             return textName;
@@ -52,11 +53,19 @@ public class ContextTest {
             this.propertyAssert = propertyAssert;
         }
 
-        public String getAsserts() {
+        public String getTransformation() {
+            return transformation;
+        }
+
+        public void setTransformation(String transformation) {
+            this.transformation = transformation;
+        }
+
+        public List<String> getAsserts() {
             return asserts;
         }
 
-        public void setAsserts(String asserts) {
+        public void setAsserts(List<String> asserts) {
             this.asserts = asserts;
         }
     }

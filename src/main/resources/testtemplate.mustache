@@ -1,5 +1,6 @@
 package com.cobiscorp.messagetransformation;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import java.io.Serializable;
 import java.util.Collection;
@@ -39,8 +40,14 @@ public class {{className}} {
 
         assertTrue(VIOLATIONS_MUST_BE_EMPTY, validateMessage(tmpDto).isEmpty());
 
-        {{&asserts}};
+        //transformation
+        {{&transformation}};
         assertTrue(VIOLATIONS_MUST_BE_EMPTY, validateMessage(transformation).isEmpty());
+
+        //asserts values
+        {{#asserts}}
+        {{&.}}
+        {{/asserts}}
 
         long endTime = System.currentTimeMillis();
         long duration = (endTime - startTime);

@@ -32,6 +32,7 @@ public class ModelgeneratorApplication implements CommandLineRunner {
     public static final String TESTTEMPLATE_MUSTACHE = "testtemplate.mustache";
     public static final String MNEMONICTEMPLATE_MUSTACHE = "mnemonic.mustache";
     public static final String TEST_CLASSNAME = "TransformAcclToCanonicalReceiveOrderTest";
+    public static final String TEST_CLASSNAME2 = "CanonicalReceiveOrderToTransformAcclTest";
 
     public static String[] acclToCanonical = {"2A", "3B", "1B", "4A", "5A"};
     public static String[] canonicalToAccl = {"1A", "3A", "AR"};
@@ -110,6 +111,8 @@ public class ModelgeneratorApplication implements CommandLineRunner {
                         , Collectors.groupingBy(MessField::getVi_mess_name)));
 
         List<ContextTest.Test> tests = new ArrayList<>();
+        List<ContextTest.Test> tests2 = new ArrayList<>();
+
         types.entrySet().stream().forEach(t -> t.getValue().forEach((m, n) -> {
             String network = t.getKey();
             String messageType = m;
@@ -119,13 +122,21 @@ public class ModelgeneratorApplication implements CommandLineRunner {
                     , messageType);
             LOG.info(name + " GENERATING...");
             generateClasses(name, messFieldList, network, messageType);
-            tests.add(generateTestCases(name, messFieldList, network, messageType));
+            if(Arrays.asList(acclToCanonical).contains(messageType)) {
+                tests.add(generateTestCases(name, messFieldList, network, messageType, Arrays.asList(acclToCanonical).contains(messageType)));
+            }else{
+                tests2.add(generateTestCases(name, messFieldList, network, messageType, Arrays.asList(acclToCanonical).contains(messageType)));
+            }
 
         }));
 
         ContextTest contextTest = new ContextTest(tests, TEST_CLASSNAME);
+        ContextTest contextTest2 = new ContextTest(tests2, TEST_CLASSNAME2);
         String content = Util.mustacheContent(contextTest, TESTTEMPLATE_MUSTACHE);
+        String content2 = Util.mustacheContent(contextTest2, TESTTEMPLATE_MUSTACHE);
         Util.generateFile(MessageFormat.format("./classes/{0}.java", TEST_CLASSNAME), content);
+        Util.generateFile(MessageFormat.format("./classes/{0}.java", TEST_CLASSNAME2), content2);
+
 
     }
 
@@ -227,15 +238,16 @@ public class ModelgeneratorApplication implements CommandLineRunner {
     public ContextTest.Test generateTestCases(String className,
                                               List<MessField> messFieldList,
                                               String network,
-                                              String message) {
+                                              String message,
+                                              Boolean AC_CAN) {
 
-        Boolean acclToCanonicalDirection = Arrays.asList(acclToCanonical).contains(message);
+
         Map<String, List<MessField>> fields = messFieldList
                 .stream()
                 .distinct()
                 .filter(s -> network.equals(s.getVi_network()))
                 .filter(s -> message.equals(s.getVi_mess_name()))
-                .collect(Collectors.groupingBy(acclToCanonicalDirection ?
+                .collect(Collectors.groupingBy(AC_CAN ?
                         MessField::getVi_variablename : MessField::getVi_desc_business_var));
 
         fields.keySet().forEach(LOG::info);
@@ -243,12 +255,12 @@ public class ModelgeneratorApplication implements CommandLineRunner {
         List<String> properties = fields.entrySet().stream().map(
                 s -> {
                     MessField mf = s.getValue().stream().findAny().get();
-                    String equivalent = acclToCanonicalDirection ? mf.getVi_equivalentvalue() : mf.getVi_cobiscatalogid();
+                    String equivalent = AC_CAN ? mf.getVi_equivalentvalue() : mf.getVi_cobiscatalogid();
                     int length = Integer.parseInt(mf.getVi_length());
                     String fakeValue = Util.getFakeValue(length);
                     equivalent = equivalent.isBlank() ? fakeValue : equivalent;
-                    String format = acclToCanonicalDirection ? ".with{0}(\"{1}\")":".{0}(\"{1}\")";
-                    String method = acclToCanonicalDirection ?
+                    String format = AC_CAN ? ".with{0}(\"{1}\")":".{0}(\"{1}\")";
+                    String method = AC_CAN ?
                             StringUtils.capitalize(Util.camelCase(s.getKey())) :Util.camelCase(s.getKey())  ;
                     if("amount".equals(s.getKey())){
                         equivalent = "new java.math.BigDecimal(100L)";
@@ -259,17 +271,43 @@ public class ModelgeneratorApplication implements CommandLineRunner {
                 }
         ).collect(Collectors.toList());
 
+
+        String assertFormat = "assertEquals(transformation.get{1}, {2});";
+        List<String> asserts = new ArrayList<>();
+        fields.entrySet().stream().forEach( s-> {
+            MessField mf = s.getValue().stream().findFirst().get();
+            if("C".equals(mf.getVi_valuetype())){
+                String equivalentValue = AC_CAN ?  mf.getVi_cobiscatalogid() : mf.getVi_equivalentvalue();
+                String getter = AC_CAN ? mf.getVi_desc_business_var(): mf.getVi_variablename();
+                getter = StringUtils.capitalize(Util.camelCase(getter))+"()";
+                String assertMessage = getter + " value must be " + equivalentValue;
+                asserts.add(MessageFormat.format(assertFormat,assertMessage,getter,"\"" +equivalentValue + "\""));
+            }else if("V".equals(mf.getVi_valuetype())){
+                String equivalentValue = AC_CAN ? mf.getVi_variablename(): mf.getVi_desc_business_var();
+                equivalentValue = "tmpDto.get" + StringUtils.capitalize(Util.camelCase(equivalentValue)) + "()";
+                String getter = AC_CAN ? mf.getVi_desc_business_var(): mf.getVi_variablename();;
+                getter = StringUtils.capitalize(Util.camelCase(getter))+"()";
+                String assertMessage = getter + " value must be " + equivalentValue;
+                asserts.add(MessageFormat.format(assertFormat,assertMessage,getter,equivalentValue));
+            }
+
+            //assertEquals("",transformation.getOriginatorNumberOrder(), "");
+            //assertEquals("",transformation.getNumOrdenOriginante(),);
+
+        });
+
         ContextTest.Test test = new ContextTest.Test();
 
         String testName = className + "Test()";
         test.setTextName(testName);
-        test.setDtoName(acclToCanonicalDirection ? className : "CanonicalReceiveOrder");
+        test.setDtoName(AC_CAN ? className : "CanonicalReceiveOrder");
         test.setProperties(properties);
-        String stype = acclToCanonicalDirection ? className : "CanonicalReceiveOrder";
-        String ttype = acclToCanonicalDirection ? "CanonicalReceiveOrder" : className;
+        test.setAsserts(asserts);
+        String stype = AC_CAN ? className : "CanonicalReceiveOrder";
+        String ttype = AC_CAN ? "CanonicalReceiveOrder" : className;
         String format = "{1} transformation = new Transform{0}to{1}(tmpDto).transform()";
         String transformation = MessageFormat.format(format, stype, ttype);
-        test.setAsserts(transformation);
+        test.setTransformation(transformation);
         return test;
 
     }
